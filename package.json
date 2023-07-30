@@ -3,11 +3,18 @@
   "version": "0.1.0",
   "description": "Condition-based query parser, optimal for building database queries.",
   "author": "tecc",
+  "repository": "https://github.com/tecc/querio.git",
+  "homepage": "https://github.com/tecc/querio",
+  "bugs": {
+    "url": "https://github.com/tecc/querio/issues"
+  },
   "keywords": [
-    "query"
+    "query",
+    "filter"
   ],
   "main": "dist/index.js",
   "license": "MIT",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "require": "./dist/index.js",
