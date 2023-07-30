@@ -84,13 +84,13 @@ export function calculateComplexity<P extends ParseSpec<P>>(
 ) {
     switch (condition.type) {
         case "not":
-            return calculateComplexity(condition["operand"], custom);
+            return calculateComplexity(condition["operand"], custom) + 1;
         case "and":
         case "or": {
             const operands: Array<Condition<P>> = condition["operands"];
             return operands.reduce(
                 (acc, con) => acc + calculateComplexity(con, custom),
-                0
+                operands.length
             );
         }
         default:
@@ -108,12 +108,14 @@ export function optimise<P extends ParseSpec<P>>(
 ): Condition<P> | null {
     switch (condition.type) {
         case "not": {
-            const inner = optimise(condition["operand"], equality);
+            const operand = condition["operand"];
+            const inner = optimise(operand, equality);
             if (inner.type === "not") {
                 return inner["operand"]; // Duplicate NOTs cancel out
             }
 
-            break;
+            condition["operand"] = inner;
+            return condition;
         }
         case "and":
         case "or": {
