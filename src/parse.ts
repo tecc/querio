@@ -41,6 +41,10 @@ function captureUntil(
             break;
         }
 
+        if (rawPart === ")") {
+            throw new Error("Group ended but not begun");
+        }
+
         let parsablePart: string,
             wrapWithNot = false;
         if (rawPart.charAt(0) === "-") {
@@ -54,7 +58,7 @@ function captureUntil(
         if (parsablePart === "(") {
             const group = captureUntil(raw, i + 1, ")");
             if (!group.foundTarget)
-                throw new Error("Group began but not ended");
+                throw new Error("Group begun but not ended");
             i += group.consumed + 1;
             // Maybe use reduce here?
             token =
@@ -124,10 +128,12 @@ export function parseCondition<P extends ParseSpec<P>>(
     condition: string,
     spec: P
 ): Condition<P> {
-    const [type, value] = condition.split(":", 2);
-    if (type == null) {
+    const [type, ...valueArr] = condition.split(":");
+    if (type == null || type == "") {
         throw new Error(`'${condition}': Condition does not have a type`);
     }
+
+    const value = valueArr.join(":");
 
     switch (type) {
         case "not":
@@ -190,8 +196,6 @@ function translate<P extends ParseSpec<P>>(
                 operand: translate(token.token, spec)
             } as BuiltinCondition<P>;
     }
-
-    throw new Error("Unrecognised token");
 }
 
 export function parse<P extends ParseSpec<P>>(

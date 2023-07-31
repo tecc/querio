@@ -1,11 +1,18 @@
+import { arraysAreEqual } from "./util";
+
 export type ParseSpec<Self extends ParseSpec<Self>> = {
     [K in string]: Self[K] extends ConditionSpec<Self, K>
         ? ConditionSpec<Self, K>
         : never;
 };
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export type ConditionSpec<P extends ParseSpec<P>, _K extends keyof P> = {
-    parse?: (value: string) => unknown;
+export type ConditionSpec<
+    P extends ParseSpec<P>,
+    _K extends keyof P,
+    V = unknown
+> = {
+    parse?: (value: string) => V;
+    compare?: (a: V, b: V) => number;
 };
 
 export type BuiltinCondition<P extends ParseSpec<P>> =
@@ -51,7 +58,7 @@ export function simpleEquality<P extends ParseSpec<P>>(
 export function areConditionsEqual<P extends ParseSpec<P>>(
     a: Condition<P>,
     b: Condition<P>,
-    equality: Equality<P>
+    spec: P
 ): boolean {
     if (a.type !== b.type) {
         return false;
@@ -59,12 +66,26 @@ export function areConditionsEqual<P extends ParseSpec<P>>(
 
     switch (a.type) {
         case "not":
-            return areConditionsEqual(a["operand"], b["operand"], equality);
+            return areConditionsEqual(a["operand"], b["operand"], spec);
         case "and":
-        case "or":
+        case "or": {
+            const aOps = a["operands"] as Array<Condition<P>>;
+            const bOps = b["operands"] as Array<Condition<P>>;
+            return arraysAreEqual(aOps, bOps, (a, b) =>
+                areConditionsEqual(a, b, spec)
+            );
+        }
+        default: {
+            const aValue = a["value"],
+                bValue = b["value"];
+            const compare = spec[a.type].compare;
+            if (typeof compare === "function") {
+                return compare(aValue, bValue) === 0;
+            } else {
+                return aValue === bValue;
+            }
+        }
     }
-
-    return;
 }
 
 /**
@@ -104,12 +125,12 @@ export { parse } from "./parse";
 
 export function optimise<P extends ParseSpec<P>>(
     condition: Condition<P>,
-    equality: Equality<P> = simpleEquality
+    spec: P
 ): Condition<P> | null {
     switch (condition.type) {
         case "not": {
             const operand = condition["operand"];
-            const inner = optimise(operand, equality);
+            const inner = optimise(operand, spec);
             if (inner.type === "not") {
                 return inner["operand"]; // Duplicate NOTs cancel out
             }
@@ -119,7 +140,7 @@ export function optimise<P extends ParseSpec<P>>(
         }
         case "and":
         case "or": {
-            const operands = removeDuplicates(condition["operands"], equality);
+            const operands = removeDuplicates(condition["operands"], spec);
             if (operands.length < 1) {
                 return null;
             } else if (operands.length === 1) {
@@ -139,13 +160,13 @@ export function optimise<P extends ParseSpec<P>>(
 
 function removeDuplicates<P extends ParseSpec<P>>(
     conditions: Array<Condition<P>>,
-    equality: Equality<P> = simpleEquality
+    spec: P
 ): Array<Condition<P>> {
     const filtered = [];
     for (const condition of conditions) {
-        const optimised = optimise(condition);
+        const optimised = optimise(condition, spec);
         if (optimised == null) continue;
-        if (filtered.some((v) => areConditionsEqual(optimised, v, equality))) {
+        if (filtered.some((v) => areConditionsEqual(optimised, v, spec))) {
             continue;
         }
         filtered.push(optimised);
