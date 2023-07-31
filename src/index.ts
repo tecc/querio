@@ -5,9 +5,10 @@ export type ParseSpec<Self extends ParseSpec<Self>> = {
         ? ConditionSpec<Self, K>
         : never;
 };
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 export type ConditionSpec<
     P extends ParseSpec<P>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _K extends keyof P,
     V = unknown
 > = {
