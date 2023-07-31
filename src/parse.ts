@@ -3,7 +3,8 @@ import type {
     Condition,
     CustomCondition,
     ParseSpec
-} from "./index";
+} from "./spec";
+import { isNullOrBlank } from "./util";
 
 type Token =
     | string
@@ -12,9 +13,10 @@ type Token =
     | { type: "or"; tokens: Array<Token> };
 
 function reduce(tokens: Array<Token>): Token {
-    if (tokens.length < 1) {
+    /* if (tokens.length < 1) {
         throw new Error("An operand must have at least 1 element");
-    } else if (tokens.length === 1) {
+    } else */
+    if (tokens.length === 1) {
         return tokens[0];
     } else {
         return { type: "group", tokens: tokens };
@@ -25,18 +27,20 @@ function reduce(tokens: Array<Token>): Token {
 function captureUntil(
     raw: Array<string>,
     offset: number,
-    target: string
+    target: string | null,
+    mustContainSomething: boolean = true
 ): { consumed: number; tokens: Array<Token>; foundTarget: boolean } {
     const tokens = [];
     let foundTarget = false;
     let consumed = 0;
     for (let i = offset; i < raw.length; i++, consumed++) {
-        const rawPart = raw[i];
-        if (rawPart.trim().length < 1) {
+        const rawPart = raw[i].trim();
+
+        if (rawPart.length < 1) {
             continue;
         }
 
-        if (rawPart === target) {
+        if (target != null && rawPart === target) {
             foundTarget = true;
             break;
         }
@@ -56,7 +60,7 @@ function captureUntil(
 
         let token: Token;
         if (parsablePart === "(") {
-            const group = captureUntil(raw, i + 1, ")");
+            const group = captureUntil(raw, i + 1, ")", false);
             if (!group.foundTarget)
                 throw new Error("Group begun but not ended");
             i += group.consumed + 1;
@@ -90,10 +94,19 @@ function captureUntil(
             current = [];
             continue;
         }
-        current.push(token);
         expectingAnything = false;
+        if (typeof token === "object") {
+            switch (token.type) {
+                case "group":
+                case "or":
+                    if (token.tokens.length < 1) {
+                        continue;
+                    }
+            }
+        }
+        current.push(token);
     }
-    if (expectingAnything) {
+    if (expectingAnything && mustContainSomething) {
         throw new Error("Was expecting a condition but got emptiness");
     }
     if (current.length > 0) {
@@ -106,6 +119,19 @@ function captureUntil(
     return { consumed, tokens, foundTarget };
 }
 
+function isNotEmpty(token: Token): boolean {
+    if (typeof token === "string") {
+        return !isNullOrBlank(token);
+    }
+    switch (token.type) {
+        case "group":
+        case "or":
+            return token.tokens.length > 0 && token.tokens.some(isNotEmpty);
+        case "not":
+            return isNotEmpty(token.token);
+    }
+}
+
 export function tokenize(query: string): Array<Token> | null {
     const trimmed = query.trim();
     if (trimmed.length < 1) {
@@ -113,15 +139,9 @@ export function tokenize(query: string): Array<Token> | null {
     }
 
     // TODO: Support quoting
-    const result = captureUntil(trimmed.split(" "), 0, ""); // will guarantee it never fails
+    const result = captureUntil(trimmed.split(/\s+/g), 0, undefined); // will guarantee it never fails
 
-    if (result.foundTarget) {
-        throw new Error(
-            "captureUntil reached the empty target, which shouldn't be possible"
-        );
-    }
-
-    return result.tokens;
+    return result.tokens.filter(isNotEmpty);
 }
 
 export function parseCondition<P extends ParseSpec<P>>(
@@ -129,7 +149,7 @@ export function parseCondition<P extends ParseSpec<P>>(
     spec: P
 ): Condition<P> {
     const [type, ...valueArr] = condition.split(":");
-    if (type == null || type == "") {
+    if (isNullOrBlank(type)) {
         throw new Error(`'${condition}': Condition does not have a type`);
     }
 
@@ -150,10 +170,10 @@ export function parseCondition<P extends ParseSpec<P>>(
             const typeKey = type as keyof P;
             const conditionSpec = spec[typeKey];
 
-            if (typeof conditionSpec.parse === "function") {
-                if (value == null) {
+            if (conditionSpec.parse != null) {
+                if (isNullOrBlank(value)) {
                     throw new Error(
-                        `'${condition}': Condition does not have a value`
+                        `'${condition}': Condition type '${type}' requires a value but one was not specified`
                     );
                 }
                 let parsed;

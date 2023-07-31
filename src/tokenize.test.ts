@@ -26,6 +26,8 @@ describe("tokenizing", () => {
                 { type: "group", tokens: ["c", "d"] },
                 "e"
             ]);
+
+            expect(tokenize("( )")).toEqual([]);
         });
         it("NOTed groups", () => {
             expect(tokenize("-( a b ) c d e")).toEqual([

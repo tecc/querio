@@ -33,6 +33,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
+    "@faker-js/faker": "^8.0.2",
     "@jest/globals": "^29.6.2",
     "@typescript-eslint/eslint-plugin": "^6.2.0",
     "@typescript-eslint/parser": "^6.2.0",
