@@ -1,5 +1,8 @@
 # Project files
-/dist/
+/dist
+
+# Test output
+/coverage
 
 # Node & package managers
 /node_modules/

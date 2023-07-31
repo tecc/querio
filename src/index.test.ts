@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
-import type { BuiltinCondition, Condition } from "./index";
+import type { Condition } from "./index";
 import { optimise, parse, values } from "./index";
+import { tokenize } from "./parse";
 
 const spec = {
     a: {
@@ -77,6 +78,38 @@ describe("parsing", () => {
             ]
         } satisfies Cond);
     });
+
+    it("not as condition type", () => {
+        expect(parse("not:a:value b c d:1", spec)).toEqual({
+            type: "and",
+            operands: [
+                {
+                    type: "not",
+                    operand: {
+                        // Well it is technically a value
+                        type: "a",
+                        value: "value"
+                    }
+                },
+                { type: "b" },
+                { type: "c" },
+                { type: "d", value: 1 }
+            ]
+        });
+    });
+
+    describe("invalid queries", () => {
+        it("no condition type", () => {
+            expect(() => parse(":i :am :untyped", spec)).toThrowError(
+                "':i': Condition does not have a type"
+            );
+        });
+        it("reserved condition type ('and', 'or')", () => {
+            expect(() => parse("and:then we feast", spec)).toThrowError(
+                "'and:then': Reserved type 'and' used"
+            );
+        });
+    });
 });
 describe("optimising", () => {
     it("double-negation", () => {
@@ -85,76 +118,94 @@ describe("optimising", () => {
             value: "something"
         };
         expect(
-            optimise({
-                type: "not",
-                operand: {
-                    type: "not",
-                    operand: inner
-                }
-            })
-        ).toEqual(inner);
-
-        expect(
-            optimise<Spec>({
-                type: "not",
-                operand: {
+            optimise(
+                {
                     type: "not",
                     operand: {
                         type: "not",
                         operand: inner
                     }
-                }
-            })
+                },
+                spec
+            )
+        ).toEqual(inner);
+
+        expect(
+            optimise(
+                {
+                    type: "not",
+                    operand: {
+                        type: "not",
+                        operand: {
+                            type: "not",
+                            operand: inner
+                        }
+                    }
+                },
+                spec
+            )
         ).toEqual({
             type: "not",
             operand: inner
         });
     });
-    describe("ORs/ANDs operators with differently-sized elements", () => {
+    describe("ORs/ANDs", () => {
         for (const op of ["and", "or"] as const) {
-            it(`${op}: with no elements`, () => {
+            it(`${op}: no elements should be null`, () => {
                 const empty: Cond = {
                     type: op,
                     operands: []
                 };
-                expect(optimise<Spec>(empty)).toBeNull();
+                expect(optimise(empty, spec)).toBeNull();
                 expect(
-                    optimise<Spec>({
-                        type: op,
-                        operands: [empty]
-                    })
+                    optimise(
+                        {
+                            type: op,
+                            operands: [empty]
+                        },
+                        spec
+                    )
                 ).toBeNull();
                 expect(
-                    optimise<Spec>({
-                        type: op,
-                        operands: [empty, empty]
-                    })
+                    optimise(
+                        {
+                            type: op,
+                            operands: [empty, empty]
+                        },
+                        spec
+                    )
                 ).toBeNull();
             });
-            it(`${op}: with one element`, () => {
+            it(`${op}: one element should be unwrapped`, () => {
                 const single: Cond = {
                     type: "a",
                     value: "something"
                 };
                 expect(
-                    optimise<Spec>({
-                        type: op,
-                        operands: [single]
-                    })
+                    optimise(
+                        {
+                            type: op,
+                            operands: [single]
+                        },
+                        spec
+                    )
                 ).toEqual(single);
                 expect(
-                    optimise<Spec>({
-                        type: op,
-                        operands: [
-                            {
-                                type: op,
-                                operands: [single]
-                            }
-                        ]
-                    })
+                    optimise(
+                        {
+                            type: op,
+                            operands: [
+                                {
+                                    type: op,
+                                    operands: [single]
+                                }
+                            ]
+                        },
+                        spec
+                    )
                 ).toEqual(single);
             });
-            it(`${op}: with more than one element`, () => {
+            it(`${op}: more than one element should stay the same`, () => {
                 const original: Cond = {
                     type: op,
                     operands: [
@@ -167,7 +218,41 @@ describe("optimising", () => {
                         }
                     ]
                 };
-                expect(optimise<Spec>(original)).toEqual(original);
+                expect(optimise(original, spec)).toEqual(original);
+            });
+            it(`${op}: duplicate elements should be removed`, () => {
+                expect(
+                    optimise(
+                        {
+                            type: op,
+                            operands: [
+                                {
+                                    type: "a",
+                                    value: "something"
+                                },
+                                {
+                                    type: "b"
+                                },
+                                {
+                                    type: "a",
+                                    value: "something"
+                                }
+                            ]
+                        },
+                        spec
+                    )
+                ).toEqual({
+                    type: op,
+                    operands: [
+                        {
+                            type: "a",
+                            value: "something"
+                        },
+                        {
+                            type: "b"
+                        }
+                    ]
+                });
             });
         }
     });
