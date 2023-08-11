@@ -8,6 +8,11 @@ export const spec = {
     c: {},
     d: values.int,
     e: {},
+    int: {
+        parse: values.int,
+        compare: values.int.compare
+    },
+    float: values.float,
     intB: values.intWithBinaryOp,
     intBR: values.intWithBinaryOp.reduced,
     floatB: values.floatWithBinaryOp,

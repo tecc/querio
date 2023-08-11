@@ -54,6 +54,13 @@ describe("arraysAreEqual", () => {
     });
 });
 
+function cmpConditions(lower: Cond, higher: Cond) {
+    expect(compareConditions(lower, lower, spec)).toEqual(0);
+    expect(compareConditions(lower, higher, spec)).toEqual(-1);
+    expect(compareConditions(higher, lower, spec)).toEqual(1);
+    expect(compareConditions(higher, higher, spec)).toEqual(0);
+}
+
 describe("comparisons", () => {
     it("numbers", () => {
         for (let i = 1; i < 100; i++) {
@@ -123,13 +130,6 @@ describe("comparisons", () => {
         });
     });
     describe("binary operator conditions", () => {
-        function cmplh(lower: Cond, higher: Cond) {
-            expect(compareConditions(lower, lower, spec)).toEqual(0);
-            expect(compareConditions(lower, higher, spec)).toEqual(-1);
-            expect(compareConditions(higher, lower, spec)).toEqual(1);
-            expect(compareConditions(higher, higher, spec)).toEqual(0);
-        }
-
         it("specially reduced", () => {
             iterations(() => {
                 const lessThan = {
@@ -147,7 +147,7 @@ describe("comparisons", () => {
                     }
                 } satisfies Cond;
 
-                cmplh(lessThan, greaterThan);
+                cmpConditions(lessThan, greaterThan);
             });
         });
         it("normally reduced", () => {
@@ -179,16 +179,73 @@ describe("comparisons", () => {
                     ReducedBinaryOperator.GreaterThan
                 );
 
-                cmplh(lessThan, greaterThan);
-                cmplh(lessThanReduction, greaterThanReduction);
-                cmplh(lessThan, lessThanReduction);
-                cmplh(greaterThan, greaterThanReduction);
+                cmpConditions(lessThan, greaterThan);
+                cmpConditions(lessThanReduction, greaterThanReduction);
+                cmpConditions(lessThan, lessThanReduction);
+                cmpConditions(greaterThan, greaterThanReduction);
+            });
+        });
+    });
+
+    describe("multi-operand conditions", () => {
+        // TODO: Testing inner comparisons (comparing two ands with same-length conditions)
+
+        it("more conditions are 'greater'", () => {
+            iterations(() => {
+                const full = [
+                    {
+                        type: "a",
+                        value: faker.string.alphanumeric()
+                    } satisfies Cond,
+                    {
+                        type: "d",
+                        value: faker.number.int()
+                    } satisfies Cond,
+                    {
+                        type: "int",
+                        value: faker.number.int()
+                    } satisfies Cond,
+                    {
+                        type: "float",
+                        value: faker.number.float()
+                    } satisfies Cond
+                ];
+                const greaterSubset = faker.helpers.arrayElements(full, {
+                    min: 1,
+                    max: Infinity
+                });
+                const lesserSubset = faker.helpers.arrayElements(
+                    greaterSubset,
+                    {
+                        min: 0,
+                        max: greaterSubset.length - 1
+                    }
+                );
+
+                const greaterAnd = {
+                    type: "and",
+                    operands: greaterSubset
+                } satisfies Cond;
+                const lesserAnd = {
+                    type: "and",
+                    operands: lesserSubset
+                } satisfies Cond;
+
+                const greaterOr = {
+                    type: "or",
+                    operands: greaterSubset
+                } satisfies Cond;
+                const lesserOr = {
+                    type: "or",
+                    operands: lesserSubset
+                } satisfies Cond;
+
+                cmpConditions(lesserAnd, greaterAnd);
+                cmpConditions(lesserOr, greaterOr);
             });
         });
     });
 });
-
-describe("condition complexity", () => {});
 
 describe("others", () => {
     describe("isNullOrBlank", () => {

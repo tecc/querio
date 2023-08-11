@@ -1,12 +1,15 @@
-import type { ConditionSpec, ConditionSpecWithValue } from "./spec";
+import type { ConditionSpecWithValue } from "./spec";
 import type { CompareResult } from "./util";
 import { compareNumbers, compareStrings } from "./util";
+import { complexityOf } from "./complexity";
 
 export interface ValueParser<T> {
     (value: string): T;
 }
 
-function wrap<T, S extends ConditionSpec<T>>(spec: S): S & ValueParser<T> {
+function wrap<T, S extends ConditionSpecWithValue<T>>(
+    spec: S
+): S & ValueParser<T> {
     return Object.assign(function (value: string) {
         return spec.parse(value);
     }, spec);
@@ -68,6 +71,12 @@ export interface ValueWithSpeciallyReducedBinaryOp<T> {
     value: T;
     operator: ReducedBinaryOperator;
 }
+
+type AnyOpType<T> =
+    | ValueWithBinaryOp<T>
+    | ValueWithReducedBinaryOp<T>
+    | ValueWithSpeciallyReducedBinaryOp<T>;
+
 export interface BinaryOpParser<
     T,
     R = ValueWithReducedBinaryOp<T>,
@@ -177,9 +186,13 @@ export function binaryOperator<T>(
         } satisfies ValueWithBinaryOp<T>;
     };
 
-    type Reduction = typeof reduce extends undefined
+    /*type Reduction = typeof reduce extends undefined
         ? ValueWithReducedBinaryOp<T>
-        : ValueWithSpeciallyReducedBinaryOp<T>;
+        : ValueWithSpeciallyReducedBinaryOp<T>;*/
+
+    type Reduction =
+        | ValueWithReducedBinaryOp<T>
+        | ValueWithSpeciallyReducedBinaryOp<T>;
 
     const reduced = (value: string): Reduction => {
         const literal = base(value);
@@ -189,56 +202,73 @@ export function binaryOperator<T>(
                     return {
                         operator: ReducedBinaryOperator.GreaterThan,
                         value: reduce(literal.value, -1)
-                    } as Reduction;
+                    };
                 } else {
                     return {
                         operator: ReducedBinaryOperator.LessThan,
                         value: literal.value,
                         not: true
-                    } as Reduction;
+                    };
                 }
             case BinaryOperator.LessThanOrEqualTo:
                 if (reduce != null) {
                     return {
                         operator: ReducedBinaryOperator.LessThan,
                         value: reduce(literal.value, 1)
-                    } as Reduction;
+                    };
                 } else {
                     return {
                         operator: ReducedBinaryOperator.GreaterThan,
                         value: literal.value,
                         not: true
-                    } as Reduction;
+                    };
                 }
             default:
                 if (reduce != null) {
                     // This is safe because the values share types
-                    return literal as unknown as Reduction;
+                    return literal as unknown as ValueWithSpeciallyReducedBinaryOp<T>;
                 } else {
                     return {
                         ...literal,
                         not: false
-                    } as unknown as Reduction;
+                    } as unknown as ValueWithReducedBinaryOp<T>;
                 }
         }
     };
 
-    const compare = (
-        a:
-            | ValueWithBinaryOp<T>
-            | ValueWithReducedBinaryOp<T>
-            | ValueWithSpeciallyReducedBinaryOp<T>,
-        b: typeof a
-    ) => compareBinaryOps(a, b, (a: T, b: T) => spec.compare(a, b));
+    type ReducedSpec<T> = T extends Reduction
+        ? ValueParser<T> & ConditionSpecWithValue<T>
+        : never;
 
-    return wrap({
+    const compare = <A extends AnyOpType<T>>(a: A, b: typeof a) =>
+        compareBinaryOps(a, b, (a: T, b: T) => spec.compare(a, b));
+
+    /*
+     * What follows here is some highly refined horribleness that *shouldn't* have a bug.
+     * It uses bad type assertions to make the typings work because they *should*.
+     */
+    const reducedSpec = wrap({
+        parse: (input) => reduced(input),
+        compare,
+        complexity: <A extends Reduction>(value: A): number => {
+            const not = value["not"] ?? false;
+            // spec.complexity should always include the base 1
+            return (not ? 1 : 0) + complexityOf(value.value, spec.complexity);
+        }
+    }) as unknown as ReducedSpec<Reduction>;
+
+    return wrap<
+        ValueWithBinaryOp<T>,
+        ConditionSpecWithValue<ValueWithBinaryOp<T>> & {
+            reduced: ReducedSpec<Reduction>;
+        }
+    >({
         parse: base,
         compare,
-        reduced: wrap({
-            parse: reduced,
-            compare
-        })
-    });
+        complexity: (value: ValueWithBinaryOp<T>) =>
+            complexityOf(value.value, spec.complexity),
+        reduced: reducedSpec
+    }) as unknown as BinaryOpParser<T> | SpecialBinaryOpParser<T>;
 }
 
 export const intWithBinaryOp = binaryOperator<number>(

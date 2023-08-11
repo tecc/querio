@@ -31,6 +31,7 @@ export type ConditionSpecWithValue<T> = {
      * @param b The second of the two values. This is the reference point; what will be compared against.
      */
     compare: (a: T, b: T) => CompareResult;
+    complexity?: (value: T) => number;
 };
 /**
  * A condition specification.
