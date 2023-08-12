@@ -7,3 +7,4 @@ export { optimise } from "./optimise";
 export { calculateComplexity } from "./complexity";
 
 export * as values from "./values";
+export * as util from "./util";

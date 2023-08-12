@@ -14,6 +14,7 @@ function wrap<T, S extends ConditionSpecWithValue<T>>(
         return spec.parse(value);
     }, spec);
 }
+
 function noBadValues<T>(
     f: (value: string) => T | null | undefined
 ): (value: string) => T {
@@ -51,6 +52,7 @@ export enum BinaryOperator {
     GreaterThanOrEqualTo = ">=",
     GreaterThan = ">"
 }
+
 export enum ReducedBinaryOperator {
     EqualTo = "=",
     NotEqualTo = "!=",
@@ -62,11 +64,13 @@ export interface ValueWithBinaryOp<T> {
     value: T;
     operator: BinaryOperator;
 }
+
 export interface ValueWithReducedBinaryOp<T> {
     value: T;
     operator: ReducedBinaryOperator;
     not: boolean;
 }
+
 export interface ValueWithSpeciallyReducedBinaryOp<T> {
     value: T;
     operator: ReducedBinaryOperator;
@@ -89,6 +93,7 @@ export interface BinaryOpParser<
      */
     reduced: ValueParser<R> & ConditionSpecWithValue<R>;
 }
+
 export type SpecialBinaryOpParser<T> = BinaryOpParser<
     T,
     ValueWithSpeciallyReducedBinaryOp<T>
