@@ -7,6 +7,9 @@ export const unixTimestamp = wrap({
     compare: compareDates
 });
 
+/**
+ * UTC Date. Must be formatted as `<year>-<month>-<day>`.
+ */
 export const utcDate = wrap({
     parse: (input) => {
         const [year, month, day, ...remaining] = input.split("-");

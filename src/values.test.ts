@@ -200,3 +200,40 @@ describe("reduced binary operators", () => {
         });
     });
 });
+
+describe("time", () => {
+    const spec = {
+        unix: values.unixTimestamp,
+        ymd: values.utcDate
+    };
+    it("unix timestamps", () => {
+        for (const timestamp of [Date.now(), 0]) {
+            const date = new Date(timestamp);
+            expect(parse(`unix:${date.getTime()}`, spec)).toEqual({
+                type: "unix",
+                value: date
+            });
+        }
+    });
+    it("UTC dates (year-month-day)", () => {
+        for (const timestamp of [Date.now(), 0]) {
+            const original = new Date(timestamp);
+            const date = new Date(
+                Date.UTC(
+                    original.getUTCFullYear(),
+                    original.getUTCMonth(),
+                    original.getDay()
+                )
+            );
+            expect(
+                parse(
+                    `ymd:${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`,
+                    spec
+                )
+            ).toEqual({
+                type: "ymd",
+                value: date
+            });
+        }
+    });
+});
