@@ -56,6 +56,10 @@ export function compareStrings(a: string, b: string): CompareResult {
     return numberToCompareResult(a.localeCompare(b)) as CompareResult;
 }
 
+export function compareDates(a: Date, b: Date): CompareResult {
+    return compareNumbers(a.getTime(), b.getTime());
+}
+
 export function isBuiltinConditionType(
     type: string
 ): type is BuiltinCondition<unknown>["type"] {

@@ -1,13 +1,18 @@
 import type { ConditionSpecWithValue } from "./spec";
 import type { CompareResult } from "./util";
-import { compareNumbers, compareStrings } from "./util";
+import {
+    compareDates,
+    compareNumbers,
+    compareStrings,
+    isNullOrBlank
+} from "./util";
 import { complexityOf } from "./complexity";
 
 export interface ValueParser<T> {
     (value: string): T;
 }
 
-function wrap<T, S extends ConditionSpecWithValue<T>>(
+function wrap<S extends ConditionSpecWithValue<T>, T = ReturnType<S["parse"]>>(
     spec: S
 ): S & ValueParser<T> {
     return Object.assign(function (value: string) {
@@ -15,33 +20,63 @@ function wrap<T, S extends ConditionSpecWithValue<T>>(
     }, spec);
 }
 
+function ensureIsNotBad<T>(value: T | null | undefined): T {
+    if (value == null) {
+        throw new Error("Parsed value is null");
+    }
+    if (Number.isNaN(value)) {
+        throw new Error("Parsed value is NaN (not a number)");
+    }
+    return value;
+}
 function noBadValues<T>(
     f: (value: string) => T | null | undefined
 ): (value: string) => T {
     return (v) => {
         const parsed = f(v);
-        if (parsed == null) {
-            throw new Error("Parsed value is null");
-        }
-        if (Number.isNaN(parsed)) {
-            throw new Error("Parsed value is NaN (not a number)");
-        }
-        return parsed;
+        return ensureIsNotBad(parsed);
     };
 }
 
 export const string = wrap({
-    parse: (value) => value,
+    parse: (value) => value as string,
     compare: compareStrings
 });
 
+const parseIntSafe = noBadValues(parseInt);
+
 export const int = wrap({
-    parse: noBadValues(parseInt),
+    parse: parseIntSafe,
     compare: compareNumbers
 });
 export const float = wrap({
     parse: noBadValues(parseFloat),
     compare: compareNumbers
+});
+
+export const unixTimestamp = wrap({
+    parse: (input) => new Date(parseIntSafe(input)),
+    compare: compareDates
+});
+
+export const utcDate = wrap({
+    parse: (input) => {
+        const [year, month, day, ...remaining] = input.split("-");
+
+        if (
+            isNullOrBlank(year) ||
+            isNullOrBlank(month) ||
+            isNullOrBlank(day) ||
+            remaining.length > 0
+        ) {
+            throw new Error("Invalid format: should be '<year>-<month>-<day>'");
+        }
+
+        return new Date(
+            Date.UTC(parseIntSafe(year), parseIntSafe(month), parseIntSafe(day))
+        );
+    },
+    compare: compareDates
 });
 
 export enum BinaryOperator {
@@ -263,7 +298,6 @@ export function binaryOperator<T>(
     }) as unknown as ReducedSpec<Reduction>;
 
     return wrap<
-        ValueWithBinaryOp<T>,
         ConditionSpecWithValue<ValueWithBinaryOp<T>> & {
             reduced: ReducedSpec<Reduction>;
         }
@@ -281,12 +315,5 @@ export const intWithBinaryOp = binaryOperator<number>(
     (value, diff) => value + diff
 );
 export const floatWithBinaryOp = binaryOperator<number>(float);
-
-export function mapped<T, U>(
-    original: ValueParser<T>,
-    mapper: (value: T) => U
-): ValueParser<U> {
-    return function (value: string) {
-        return mapper(original(value));
-    };
-}
+export const unixTimestampWithBinaryOp = binaryOperator<Date>(unixTimestamp);
+export const utcDateWithBinaryOp = binaryOperator<Date>(utcDate);
